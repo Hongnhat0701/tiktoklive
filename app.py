@@ -107,7 +107,16 @@ class TikTokDownloaderApp:
                 total_seconds -= 1
                 
             try:
-                process.terminate() 
+                # Dùng taskkill để diệt tận gốc tiến trình cha và toàn bộ tiến trình con (ffmpeg)
+                subprocess.run(['taskkill', '/F', '/T', '/PID', str(process.pid)], creationflags=subprocess.CREATE_NO_WINDOW)
+                time.sleep(2) # Chờ 2 giây để Windows nhả file hoàn toàn
+                
+                # Tự động quét và xóa đuôi .part
+                for filename in os.listdir(folder):
+                    if filename.endswith(".part") and "TiktokLive" in filename:
+                        old_path = os.path.join(folder, filename)
+                        new_path = old_path.replace(".part", "")
+                        os.rename(old_path, new_path)
             except:
                 pass
                 
