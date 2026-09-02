@@ -12,12 +12,12 @@ class TikTokDownloaderApp:
         self.root.geometry("750x450")
         self.root.configure(padx=15, pady=15)
         
-        # Thiết lập giao diện hiện đại
-        style = ttk.Style()
-        if 'clam' in style.theme_names():
-            style.theme_use('clam')
-        style.configure("Treeview.Heading", font=('Segoe UI', 10, 'bold'), background="#f0f0f0")
-        style.configure("Treeview", font=('Segoe UI', 9), rowheight=30)
+        # Thiết lập giao diện hiện đại (Đã sửa lỗi biến self.style)
+        self.style = ttk.Style()
+        if 'clam' in self.style.theme_names():
+            self.style.theme_use('clam')
+        self.style.configure("Treeview.Heading", font=('Segoe UI', 10, 'bold'), background="#f0f0f0")
+        self.style.configure("Treeview", font=('Segoe UI', 9), rowheight=30)
         
         # Biến lưu trữ
         self.save_folder = tk.StringVar(value=os.getcwd())
@@ -39,8 +39,9 @@ class TikTokDownloaderApp:
         ttk.Label(frame_link, text="Link TikTok Live:", font=('Segoe UI', 9, 'bold')).pack(side=tk.LEFT)
         self.url_entry = ttk.Entry(frame_link)
         self.url_entry.pack(side=tk.LEFT, padx=10, fill=tk.X, expand=True)
+        
         # Nút bấm nhấn mạnh
-        style.configure("Accent.TButton", font=('Segoe UI', 9, 'bold'), foreground="blue")
+        self.style.configure("Accent.TButton", font=('Segoe UI', 9, 'bold'), foreground="blue")
         ttk.Button(frame_link, text="➕ Thêm tiến trình tải (5 Phút)", style="Accent.TButton", command=self.start_download).pack(side=tk.LEFT)
         
         # 3. Bảng quản lý tiến trình (Treeview)
@@ -76,42 +77,34 @@ class TikTokDownloaderApp:
             return
             
         self.task_counter += 1
-        # Thêm một dòng vào bảng
         item_id = self.tree.insert("", tk.END, values=(self.task_counter, url, "Đang kết nối...", "05:00"))
-        self.url_entry.delete(0, tk.END) # Xóa ô nhập để dán link mới
+        self.url_entry.delete(0, tk.END) 
         
         folder = self.save_folder.get()
-        
-        # Tạo luồng chạy ẩn độc lập cho mỗi link để có thể tải nhiều link cùng lúc
         threading.Thread(target=self.process_download, args=(item_id, url, folder), daemon=True).start()
 
     def process_download(self, item_id, url, folder):
         try:
-            # Lệnh gọi yt-dlp, file lưu tại thư mục đã chọn
             cmd = ["yt-dlp", "-o", "TiktokLive_%(id)s_%(autonumber)s.%(ext)s", url]
             process = subprocess.Popen(cmd, cwd=folder, creationflags=subprocess.CREATE_NO_WINDOW)
             
             total_seconds = 300 # 5 Phút
             
-            # Vòng lặp đếm ngược thời gian thực
             while total_seconds > 0:
-                # Kiểm tra nếu Live bị tắt hoặc lỗi giữa chừng
                 if process.poll() is not None:
                     break
                     
                 mins, secs = divmod(total_seconds, 60)
                 time_str = f"{mins:02d}:{secs:02d}"
                 
-                # Cập nhật thời gian trên giao diện
                 current_values = self.tree.item(item_id, 'values')
                 self.root.after(0, self.tree.item, item_id, {"values": (current_values[0], url, "🔴 Đang ghi hình", time_str)})
                 
                 time.sleep(1)
                 total_seconds -= 1
                 
-            # Xử lý khi hết 5 phút hoặc luồng tự ngắt
             try:
-                process.terminate() # Ép dừng tải
+                process.terminate() 
             except:
                 pass
                 
