@@ -63,7 +63,6 @@ class TikTokDownloaderApp:
         if folder:
             self.save_folder.set(folder)
 
-    # Hàm hỗ trợ cập nhật giao diện an toàn không bị treo
     def safe_update(self, item_id, url, status, time_str):
         try:
             current = self.tree.item(item_id, 'values')
@@ -86,9 +85,10 @@ class TikTokDownloaderApp:
 
     def process_download(self, item_id, url, folder):
         try:
-            # Gắn trực tiếp thư mục vào tên file xuất ra để app không bị mất dấu yt-dlp.exe
-            output_template = os.path.join(folder, "TiktokLive_%(id)s_%(autonumber)s.%(ext)s")
-            cmd = ["yt-dlp", "-o", output_template, url]
+            output_template = os.path.join(folder, f"TiktokLive_STT{item_id}_%(id)s.%(ext)s")
+            
+            # Đã thêm cờ --no-part để xuất thẳng video mp4
+            cmd = ["yt-dlp", "--no-part", "-o", output_template, url]
             
             process = subprocess.Popen(cmd, creationflags=subprocess.CREATE_NO_WINDOW)
             total_seconds = 300 
@@ -100,33 +100,22 @@ class TikTokDownloaderApp:
                 mins, secs = divmod(total_seconds, 60)
                 time_str = f"{mins:02d}:{secs:02d}"
                 
-                # Gọi hàm an toàn để đẩy dữ liệu lên giao diện
                 self.root.after(0, self.safe_update, item_id, url, "🔴 Đang ghi hình", time_str)
-                
                 time.sleep(1)
                 total_seconds -= 1
                 
             try:
-                # Dùng taskkill để diệt tận gốc tiến trình cha và toàn bộ tiến trình con (ffmpeg)
                 subprocess.run(['taskkill', '/F', '/T', '/PID', str(process.pid)], creationflags=subprocess.CREATE_NO_WINDOW)
-                time.sleep(2) # Chờ 2 giây để Windows nhả file hoàn toàn
-                
-                # Tự động quét và xóa đuôi .part
-                for filename in os.listdir(folder):
-                    if filename.endswith(".part") and "TiktokLive" in filename:
-                        old_path = os.path.join(folder, filename)
-                        new_path = old_path.replace(".part", "")
-                        os.rename(old_path, new_path)
             except:
                 pass
                 
             if total_seconds > 0:
-                 self.root.after(0, self.safe_update, item_id, url, "Live đã tắt sớm / Bị lỗi", "00:00")
+                 self.root.after(0, self.safe_update, item_id, url, "Live đã tắt sớm", "00:00")
             else:
                  self.root.after(0, self.safe_update, item_id, url, "✅ Đã lưu video", "00:00")
                  
         except Exception as e:
-            self.root.after(0, self.safe_update, item_id, url, "❌ Lỗi: Thiếu file yt-dlp.exe", "00:00")
+            self.root.after(0, self.safe_update, item_id, url, "❌ Lỗi khởi tạo", "00:00")
 
 if __name__ == "__main__":
     root = tk.Tk()
