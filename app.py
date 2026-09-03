@@ -88,7 +88,8 @@ class TikTokDownloaderApp:
             output_template = os.path.join(folder, f"TiktokLive_STT{item_id}_%(id)s.%(ext)s")
             
             # Thêm cờ mượn quyền đăng nhập từ Chrome để vượt tường lửa của TikTok
-            cmd = ["yt-dlp", "--no-part", "--cookies-from-browser", "chrome", "-o", output_template, url]
+            # Đọc thẻ VIP từ file cookies.txt độc lập để không bị tranh chấp với Chrome
+            cmd = ["yt-dlp", "--no-part", "--cookies", "cookies.txt", "-o", output_template, url]
             
             process = subprocess.Popen(cmd, creationflags=subprocess.CREATE_NO_WINDOW)
             total_seconds = 300 
