@@ -87,8 +87,8 @@ class TikTokDownloaderApp:
         try:
             output_template = os.path.join(folder, f"TiktokLive_STT{item_id}_%(id)s.%(ext)s")
             
-            # Đã thêm cờ --no-part để xuất thẳng video mp4
-            cmd = ["yt-dlp", "--no-part", "-o", output_template, url]
+            # Thêm cờ mượn quyền đăng nhập từ Chrome để vượt tường lửa của TikTok
+            cmd = ["yt-dlp", "--no-part", "--cookies-from-browser", "chrome", "-o", output_template, url]
             
             process = subprocess.Popen(cmd, creationflags=subprocess.CREATE_NO_WINDOW)
             total_seconds = 300 
