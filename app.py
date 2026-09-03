@@ -89,8 +89,9 @@ class TikTokDownloaderApp:
             
             # Thêm cờ mượn quyền đăng nhập từ Chrome để vượt tường lửa của TikTok
             # Đọc thẻ VIP từ file cookies.txt độc lập để không bị tranh chấp với Chrome
-            cmd = ["yt-dlp", "--no-part", "--cookies", "cookies.txt", "-o", output_template, url]
-            
+           # Trỏ thẳng vào file cookies nằm chung thư mục với app.exe
+            cookie_path = os.path.join(os.getcwd(), "cookies.txt")
+            cmd = ["yt-dlp", "--no-part", "--cookies", cookie_path, "-o", output_template, url]
             process = subprocess.Popen(cmd, creationflags=subprocess.CREATE_NO_WINDOW)
             total_seconds = 300 
             
