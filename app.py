@@ -1,4 +1,3 @@
-```python
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 import subprocess
@@ -32,26 +31,18 @@ class TikTokDownloaderApp:
             rowheight=30
         )
 
-        # Thư mục mặc định
         if getattr(sys, "frozen", False):
-            base_dir = os.path.dirname(sys.executable)
+            base_dir = os.path.dirname(os.path.abspath(sys.executable))
         else:
             base_dir = os.path.dirname(os.path.abspath(__file__))
 
         self.base_dir = base_dir
-
         self.save_folder = tk.StringVar(value=base_dir)
         self.task_counter = 0
 
         self.create_widgets()
 
-    # =========================================================
-    # GIAO DIỆN
-    # =========================================================
-
     def create_widgets(self):
-
-        # Thư mục lưu
         frame_folder = ttk.Frame(self.root)
         frame_folder.pack(fill=tk.X, pady=(0, 15))
 
@@ -78,7 +69,6 @@ class TikTokDownloaderApp:
             command=self.choose_folder
         ).pack(side=tk.LEFT)
 
-        # Link
         frame_link = ttk.Frame(self.root)
         frame_link.pack(fill=tk.X, pady=(0, 15))
 
@@ -110,7 +100,6 @@ class TikTokDownloaderApp:
             command=self.start_download
         ).pack(side=tk.LEFT)
 
-        # Danh sách tiến trình
         columns = ("id", "url", "status", "time")
 
         self.tree = ttk.Treeview(
@@ -169,22 +158,13 @@ class TikTokDownloaderApp:
             fill=tk.Y
         )
 
-    # =========================================================
-    # CHỌN THƯ MỤC
-    # =========================================================
-
     def choose_folder(self):
-
         folder = filedialog.askdirectory(
             title="Chọn thư mục lưu video"
         )
 
         if folder:
             self.save_folder.set(folder)
-
-    # =========================================================
-    # UPDATE GIAO DIỆN AN TOÀN
-    # =========================================================
 
     def safe_update(
         self,
@@ -193,7 +173,6 @@ class TikTokDownloaderApp:
         status,
         time_str
     ):
-
         try:
             current = self.tree.item(
                 item_id,
@@ -216,26 +195,17 @@ class TikTokDownloaderApp:
         except Exception:
             pass
 
-    # =========================================================
-    # THÊM DOWNLOAD
-    # =========================================================
-
     def start_download(self):
-
         url = self.url_entry.get().strip()
 
         if not url:
-
             messagebox.showwarning(
                 "Thiếu thông tin",
                 "Vui lòng dán link TikTok Live vào ô trống!"
             )
-
             return
 
         self.task_counter += 1
-
-        # STT thật
         task_number = self.task_counter
 
         item_id = self.tree.insert(
@@ -256,7 +226,7 @@ class TikTokDownloaderApp:
 
         folder = self.save_folder.get()
 
-        thread = threading.Thread(
+        threading.Thread(
             target=self.process_download,
             args=(
                 item_id,
@@ -265,66 +235,41 @@ class TikTokDownloaderApp:
                 folder
             ),
             daemon=True
-        )
-
-        thread.start()
-
-    # =========================================================
-    # XÁC ĐỊNH THƯ MỤC APP
-    # =========================================================
+        ).start()
 
     def get_base_dir(self):
-
         if getattr(sys, "frozen", False):
-
             return os.path.dirname(
-                os.path.abspath(
-                    sys.executable
-                )
+                os.path.abspath(sys.executable)
             )
 
         return os.path.dirname(
             os.path.abspath(__file__)
         )
 
-    # =========================================================
-    # TÌM YT-DLP
-    # =========================================================
-
     def get_ytdlp_command(self):
-
         base_dir = self.get_base_dir()
 
-        # Ưu tiên yt-dlp.exe nằm cạnh app.exe
         local_ytdlp = os.path.join(
             base_dir,
             "yt-dlp.exe"
         )
 
         if os.path.isfile(local_ytdlp):
-
             return local_ytdlp
 
-        # Nếu không có thì dùng yt-dlp trong PATH
         return "yt-dlp"
-
-    # =========================================================
-    # ĐỌC OUTPUT CỦA YT-DLP
-    # =========================================================
 
     def read_process_output(
         self,
         process,
         output_lines
     ):
-
         try:
-
             for line in iter(
                 process.stdout.readline,
                 ""
             ):
-
                 if not line:
                     break
 
@@ -334,27 +279,20 @@ class TikTokDownloaderApp:
                     output_lines.append(line)
 
         except Exception as e:
-
             output_lines.append(
                 f"Reader error: {e}"
             )
 
         finally:
-
             try:
                 process.stdout.close()
             except Exception:
                 pass
 
-    # =========================================================
-    # PHÂN TÍCH LỖI
-    # =========================================================
-
     def classify_error(
         self,
         output_lines
     ):
-
         if not output_lines:
             return "❌ yt-dlp đã dừng"
 
@@ -364,7 +302,6 @@ class TikTokDownloaderApp:
 
         text = full_text.lower()
 
-        # Đăng nhập / cookies
         if any(
             key in text
             for key in [
@@ -375,10 +312,8 @@ class TikTokDownloaderApp:
                 "authenticate"
             ]
         ):
-
             return "❌ Lỗi đăng nhập/Cookies"
 
-        # Không Live
         if any(
             key in text
             for key in [
@@ -388,10 +323,8 @@ class TikTokDownloaderApp:
                 "is not live"
             ]
         ):
-
             return "❌ Kênh không phát Live"
 
-        # Khu vực
         if any(
             key in text
             for key in [
@@ -401,10 +334,8 @@ class TikTokDownloaderApp:
                 "not available in your country"
             ]
         ):
-
             return "❌ Bị giới hạn khu vực"
 
-        # Private
         if any(
             key in text
             for key in [
@@ -412,10 +343,8 @@ class TikTokDownloaderApp:
                 "followers-only"
             ]
         ):
-
             return "❌ Live riêng tư"
 
-        # HTTP / tải
         if any(
             key in text
             for key in [
@@ -428,10 +357,8 @@ class TikTokDownloaderApp:
                 "timeout"
             ]
         ):
-
             return "❌ Lỗi kết nối/Tải"
 
-        # Tìm dòng ERROR
         error_lines = [
             line
             for line in output_lines
@@ -439,28 +366,19 @@ class TikTokDownloaderApp:
         ]
 
         if error_lines:
-
             error = error_lines[-1]
-
         else:
-
             error = output_lines[-1]
 
-        # Loại bỏ tiền tố ERROR:
         error = error.replace(
             "ERROR:",
             ""
         ).strip()
 
         if len(error) > 50:
-
             error = error[:50] + "..."
 
         return f"❌ {error}"
-
-    # =========================================================
-    # DOWNLOAD
-    # =========================================================
 
     def process_download(
         self,
@@ -469,31 +387,18 @@ class TikTokDownloaderApp:
         url,
         folder
     ):
-
         process = None
         output_lines = []
 
         try:
-
-            # -------------------------------------------------
-            # THƯ MỤC APP
-            # -------------------------------------------------
-
             base_dir = self.get_base_dir()
-
-            # -------------------------------------------------
-            # COOKIES
-            # -------------------------------------------------
 
             cookie_path = os.path.join(
                 base_dir,
                 "cookies.txt"
             )
 
-            if not os.path.isfile(
-                cookie_path
-            ):
-
+            if not os.path.isfile(cookie_path):
                 self.root.after(
                     0,
                     self.safe_update,
@@ -502,65 +407,34 @@ class TikTokDownloaderApp:
                     "❌ Thiếu cookies.txt",
                     "00:00"
                 )
-
                 return
-
-            # -------------------------------------------------
-            # FILE OUTPUT
-            # -------------------------------------------------
 
             output_template = os.path.join(
                 folder,
                 f"TiktokLive_STT{task_number}_%(id)s.%(ext)s"
             )
 
-            # -------------------------------------------------
-            # YT-DLP
-            # -------------------------------------------------
-
             ytdlp = self.get_ytdlp_command()
-
-            # -------------------------------------------------
-            # COMMAND
-            # -------------------------------------------------
 
             cmd = [
                 ytdlp,
-
                 "--no-part",
-
                 "--cookies",
                 cookie_path,
-
                 "-o",
                 output_template,
-
                 url
             ]
 
-            # -------------------------------------------------
-            # CHẠY YT-DLP
-            # -------------------------------------------------
-
             process = subprocess.Popen(
                 cmd,
-
                 stdout=subprocess.PIPE,
-
                 stderr=subprocess.STDOUT,
-
                 text=True,
-
                 encoding="utf-8",
-
                 errors="replace",
-
                 creationflags=subprocess.CREATE_NO_WINDOW
             )
-
-            # -------------------------------------------------
-            # THREAD ĐỌC LOG
-            # -------------------------------------------------
 
             reader_thread = threading.Thread(
                 target=self.read_process_output,
@@ -573,15 +447,10 @@ class TikTokDownloaderApp:
 
             reader_thread.start()
 
-            # -------------------------------------------------
-            # TIMER 5 PHÚT
-            # -------------------------------------------------
-
             total_seconds = 300
 
             while total_seconds > 0:
 
-                # yt-dlp tự dừng
                 if process.poll() is not None:
 
                     reader_thread.join(
@@ -592,7 +461,6 @@ class TikTokDownloaderApp:
                         output_lines
                     )
 
-                    # In log ra console nếu chạy Python
                     print("\n========== YT-DLP ==========")
 
                     for line in output_lines:
@@ -618,7 +486,6 @@ class TikTokDownloaderApp:
 
                     return
 
-                # Timer
                 mins, secs = divmod(
                     total_seconds,
                     60
@@ -641,14 +508,9 @@ class TikTokDownloaderApp:
 
                 total_seconds -= 1
 
-            # -------------------------------------------------
-            # ĐỦ 5 PHÚT
-            # -------------------------------------------------
-
             if process.poll() is None:
 
                 try:
-
                     subprocess.run(
                         [
                             "taskkill",
@@ -657,29 +519,19 @@ class TikTokDownloaderApp:
                             "/PID",
                             str(process.pid)
                         ],
-
                         creationflags=subprocess.CREATE_NO_WINDOW,
-
                         stdout=subprocess.DEVNULL,
-
                         stderr=subprocess.DEVNULL,
-
                         timeout=10
                     )
 
                 except Exception:
                     pass
 
-            # -------------------------------------------------
-            # CHỜ PROCESS KẾT THÚC
-            # -------------------------------------------------
-
             try:
-
                 process.wait(
                     timeout=10
                 )
-
             except Exception:
                 pass
 
@@ -687,12 +539,7 @@ class TikTokDownloaderApp:
                 timeout=3
             )
 
-            # -------------------------------------------------
-            # KIỂM TRA FILE VIDEO
-            # -------------------------------------------------
-
             try:
-
                 files = os.listdir(
                     folder
                 )
@@ -701,31 +548,26 @@ class TikTokDownloaderApp:
                     f"TiktokLive_STT{task_number}_"
                 )
 
-                video_files = [
-                    f
-                    for f in files
-                    if f.startswith(prefix)
-                    and os.path.isfile(
-                        os.path.join(
-                            folder,
-                            f
-                        )
-                    )
-                    and os.path.getsize(
-                        os.path.join(
-                            folder,
-                            f
-                        )
-                    ) > 0
-                ]
-
-            except Exception:
-
                 video_files = []
 
-            # -------------------------------------------------
-            # CÓ VIDEO
-            # -------------------------------------------------
+                for filename in files:
+
+                    full_path = os.path.join(
+                        folder,
+                        filename
+                    )
+
+                    if (
+                        filename.startswith(prefix)
+                        and os.path.isfile(full_path)
+                        and os.path.getsize(full_path) > 0
+                    ):
+                        video_files.append(
+                            filename
+                        )
+
+            except Exception:
+                video_files = []
 
             if video_files:
 
@@ -738,10 +580,6 @@ class TikTokDownloaderApp:
                     "00:00"
                 )
 
-            # -------------------------------------------------
-            # KHÔNG CÓ VIDEO
-            # -------------------------------------------------
-
             else:
 
                 status_text = self.classify_error(
@@ -749,10 +587,7 @@ class TikTokDownloaderApp:
                 )
 
                 if status_text == "❌ yt-dlp đã dừng":
-
-                    status_text = (
-                        "❌ Không tạo được video"
-                    )
+                    status_text = "❌ Không tạo được video"
 
                 self.root.after(
                     0,
@@ -763,7 +598,6 @@ class TikTokDownloaderApp:
                     "00:00"
                 )
 
-                # In log
                 print("\n========== YT-DLP ==========")
 
                 for line in output_lines:
@@ -778,10 +612,6 @@ class TikTokDownloaderApp:
                     "============================\n"
                 )
 
-        # =====================================================
-        # KHÔNG TÌM THẤY YT-DLP
-        # =====================================================
-
         except FileNotFoundError:
 
             self.root.after(
@@ -792,10 +622,6 @@ class TikTokDownloaderApp:
                 "❌ Không tìm thấy yt-dlp",
                 "00:00"
             )
-
-        # =====================================================
-        # LỖI KHÁC
-        # =====================================================
 
         except Exception as e:
 
@@ -815,7 +641,6 @@ class TikTokDownloaderApp:
 
         finally:
 
-            # Đảm bảo process không còn chạy
             if process is not None:
 
                 try:
@@ -830,11 +655,8 @@ class TikTokDownloaderApp:
                                 "/PID",
                                 str(process.pid)
                             ],
-
                             creationflags=subprocess.CREATE_NO_WINDOW,
-
                             stdout=subprocess.DEVNULL,
-
                             stderr=subprocess.DEVNULL
                         )
 
@@ -842,17 +664,7 @@ class TikTokDownloaderApp:
                     pass
 
 
-# =============================================================
-# MAIN
-# =============================================================
-
 if __name__ == "__main__":
-
     root = tk.Tk()
-
-    app = TikTokDownloaderApp(
-        root
-    )
-
+    app = TikTokDownloaderApp(root)
     root.mainloop()
-```
