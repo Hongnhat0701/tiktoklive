@@ -5,230 +5,163 @@ import threading
 import time
 import os
 import sys
-import re
-import asyncio
 
-# Thư viện chuyên kết nối Webcast TikTok
-from TikTokLive import TikTokLiveClient
-
-class TikTokDownloaderApp:
+class TikTokFinalRecorder:
     def __init__(self, root):
         self.root = root
-        self.root.title("TikTok Live Downloader Pro - Auto Stream Grabber")
-        self.root.geometry("780x460")
+        self.root.title("TikTok Live 5-Min Auto Recorder (Final)")
+        self.root.geometry("780x430")
         self.root.configure(padx=15, pady=15)
         
-        self.style = ttk.Style()
-        if 'clam' in self.style.theme_names():
-            self.style.theme_use('clam')
-        self.style.configure("Treeview.Heading", font=('Segoe UI', 10, 'bold'), background="#f0f0f0")
-        self.style.configure("Treeview", font=('Segoe UI', 9), rowheight=30)
+        # Mặc định lưu ra ngoài Desktop cho dễ tìm
+        default_dir = os.path.join(os.path.expanduser("~"), "Desktop")
+        self.save_folder = tk.StringVar(value=default_dir)
+        self.counter = 0
         
-        self.save_folder = tk.StringVar(value=os.getcwd())
-        self.task_counter = 0
+        self.build_ui()
         
-        self.create_widgets()
+    def build_ui(self):
+        # 1. Chọn thư mục lưu
+        f_folder = ttk.Frame(self.root)
+        f_folder.pack(fill=tk.X, pady=(0, 10))
+        ttk.Label(f_folder, text="Thư mục lưu:", font=('Segoe UI', 9, 'bold')).pack(side=tk.LEFT)
+        ttk.Entry(f_folder, textvariable=self.save_folder, state='readonly').pack(side=tk.LEFT, padx=10, fill=tk.X, expand=True)
+        ttk.Button(f_folder, text="📁 Chọn thư mục", command=self.choose_folder).pack(side=tk.LEFT)
         
-    def create_widgets(self):
-        frame_folder = ttk.Frame(self.root)
-        frame_folder.pack(fill=tk.X, pady=(0, 15))
-        ttk.Label(frame_folder, text="Thư mục lưu:", font=('Segoe UI', 9, 'bold')).pack(side=tk.LEFT)
-        ttk.Entry(frame_folder, textvariable=self.save_folder, state='readonly').pack(side=tk.LEFT, padx=10, fill=tk.X, expand=True)
-        ttk.Button(frame_folder, text="📁 Chọn thư mục", command=self.choose_folder).pack(side=tk.LEFT)
+        # 2. Nhập link stream
+        f_input = ttk.Frame(self.root)
+        f_input.pack(fill=tk.X, pady=(0, 15))
+        ttk.Label(f_input, text="Link Stream:", font=('Segoe UI', 9, 'bold')).pack(side=tk.LEFT)
+        self.entry_url = ttk.Entry(f_input)
+        self.entry_url.pack(side=tk.LEFT, padx=10, fill=tk.X, expand=True)
         
-        frame_link = ttk.Frame(self.root)
-        frame_link.pack(fill=tk.X, pady=(0, 15))
-        ttk.Label(frame_link, text="Link / ID Live:", font=('Segoe UI', 9, 'bold')).pack(side=tk.LEFT)
-        self.url_entry = ttk.Entry(frame_link)
-        self.url_entry.pack(side=tk.LEFT, padx=10, fill=tk.X, expand=True)
+        btn_start = ttk.Button(f_input, text="➕ Bắt đầu ghi 5 Phút", command=self.start_download)
+        btn_start.pack(side=tk.LEFT)
         
-        self.style.configure("Accent.TButton", font=('Segoe UI', 9, 'bold'), foreground="blue")
-        ttk.Button(frame_link, text="➕ Bắt đầu tải (5 Phút)", style="Accent.TButton", command=self.start_download).pack(side=tk.LEFT)
-        
-        columns = ("id", "url", "status", "time")
-        self.tree = ttk.Treeview(self.root, columns=columns, show="headings", height=10)
-        
+        # 3. Bảng tiến trình
+        cols = ("id", "url", "status", "time")
+        self.tree = ttk.Treeview(self.root, columns=cols, show="headings", height=9)
         self.tree.heading("id", text="STT")
-        self.tree.heading("url", text="Tài khoản / URL")
+        self.tree.heading("url", text="Luồng tải")
         self.tree.heading("status", text="Trạng thái")
         self.tree.heading("time", text="Thời gian")
         
-        self.tree.column("id", width=40, anchor=tk.CENTER)
-        self.tree.column("url", width=400, anchor=tk.W)
-        self.tree.column("status", width=180, anchor=tk.CENTER)
-        self.tree.column("time", width=80, anchor=tk.CENTER)
-        
+        self.tree.column("id", width=45, anchor=tk.CENTER)
+        self.tree.column("url", width=380, anchor=tk.W)
+        self.tree.column("status", width=200, anchor=tk.CENTER)
+        self.tree.column("time", width=85, anchor=tk.CENTER)
         self.tree.pack(fill=tk.BOTH, expand=True)
-        
-        scrollbar = ttk.Scrollbar(self.tree, orient=tk.VERTICAL, command=self.tree.yview)
-        self.tree.configure(yscrollcommand=scrollbar.set)
-        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
 
     def choose_folder(self):
-        folder = filedialog.askdirectory(title="Chọn thư mục lưu video")
-        if folder:
-            self.save_folder.set(folder)
+        d = filedialog.askdirectory()
+        if d:
+            self.save_folder.set(d)
 
-    def safe_update(self, item_id, url, status, time_str):
+    def ui_update(self, item_id, title, status, time_str):
+        # Đảm bảo cập nhật giao diện an toàn 100% trong luồng chính
         try:
-            current = self.tree.item(item_id, 'values')
-            self.tree.item(item_id, values=(current[0], url, status, time_str))
+            self.tree.item(item_id, values=(self.tree.item(item_id, 'values')[0], title, status, time_str))
         except Exception:
             pass
 
-    def extract_username(self, raw_input):
-        raw_input = raw_input.strip()
-        match = re.search(r"@([a-zA-Z0-9_.-]+)", raw_input)
-        if match:
-            return match.group(1)
-        return raw_input.replace("https://", "").replace("http://", "").split("/")[0]
-
-    def get_live_stream_url(self, unique_id):
-        client = TikTokLiveClient(unique_id=unique_id)
-        
-        async def fetch():
-            room_info = await client.web.fetch_room_info()
-            if not room_info or not client.room_id:
-                return None
-            stream_data = room_info.get("stream_url", {})
-            flv_pull_url = stream_data.get("flv_pull_url", {})
-            if flv_pull_url:
-                return list(flv_pull_url.values())[0]
-            return stream_data.get("hls_pull_url")
-
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        try:
-            return loop.run_until_complete(fetch())
-        except Exception:
-            return None
-        finally:
-            loop.close()
-
     def start_download(self):
-        raw_input = self.url_entry.get().strip()
-        if not raw_input:
-            messagebox.showwarning("Thiếu thông tin", "Vui lòng nhập link hoặc username TikTok Live!")
+        raw_url = self.entry_url.get().strip()
+        if not raw_url:
+            messagebox.showwarning("Cảnh báo", "Vui lòng dán link stream vào!")
             return
             
-        self.task_counter += 1
-        folder = self.save_folder.get()
+        # Kiểm tra nếu dán nhầm link cá nhân tiktok.com/@username
+        if "tiktok.com/@" in raw_url and not any(k in raw_url for k in [".flv", ".m3u8", "pull", "stream"]):
+            messagebox.showerror("Sai link", "Đây là link profile cá nhân. Bạn hãy lấy Link Stream trực tiếp từ Extension/Network (link có chứa 'pull', 'stream' hoặc '.flv') rồi dán vào đây.")
+            return
 
-        # KIỂM TRA: NẾU LÀ LINK STREAM TRỰC TIẾP (từ extension/F12) -> CHUYỂN THẲNG QUA FFMPEG
-        if "tiktokcdn.com" in raw_input or ".flv" in raw_input or ".m3u8" in raw_input or "pull" in raw_input:
-            title = f"Stream_STT{self.task_counter}"
-            item_id = self.tree.insert("", tk.END, values=(self.task_counter, title, "Đang khởi tạo...", "05:00"))
-            self.url_entry.delete(0, tk.END)
-            threading.Thread(target=self.download_direct_stream, args=(item_id, title, raw_input, folder), daemon=True).start()
+        self.counter += 1
+        title = f"Live_Record_{self.counter}"
+        item_id = self.tree.insert("", tk.END, values=(self.counter, title, "Khởi tạo luồng...", "05:00"))
+        self.entry_url.delete(0, tk.END)
         
-        # NẾU LÀ USERNAME HOẶC LINK PROFILE -> DÙNG TIKTOKLIVE API ĐỂ TỰ DÒ LUỒNG
-        else:
-            username = self.extract_username(raw_input)
-            item_id = self.tree.insert("", tk.END, values=(self.task_counter, f"@{username}", "Đang dò luồng Live...", "05:00"))
-            self.url_entry.delete(0, tk.END) 
-            threading.Thread(target=self.process_download, args=(item_id, username, folder), daemon=True).start()
+        dest = self.save_folder.get()
+        threading.Thread(target=self.worker_record, args=(item_id, title, raw_url, dest), daemon=True).start()
 
-    def download_direct_stream(self, item_id, title, stream_url, folder):
-        """Hàm xử lý ghi hình trực tiếp luồng stream thô bằng ffmpeg"""
+    def worker_record(self, item_id, title, stream_url, folder):
+        ts_output = None
+        mp4_output = None
         try:
-            timestamp = int(time.time())
-            output_file = os.path.join(folder, f"{title}_{timestamp}.mp4")
+            t_now = int(time.time())
+            # Bước 1: Ghi vào file .ts để chống hỏng header tuyệt đối
+            ts_output = os.path.join(folder, f"{title}_{t_now}.ts")
+            mp4_output = os.path.join(folder, f"{title}_{t_now}.mp4")
 
-            cmd = [
+            ffmpeg_record_cmd = [
                 "ffmpeg",
                 "-y",
+                "-reconnect", "1",
+                "-reconnect_streamed", "1",
+                "-reconnect_delay_max", "5",
+                "-headers", "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36\r\nReferer: https://www.tiktok.com/\r\n",
                 "-i", stream_url,
                 "-t", "300",
                 "-c", "copy",
-                output_file
+                ts_output
             ]
 
-            process = subprocess.Popen(
-                cmd,
+            proc = subprocess.Popen(
+                ffmpeg_record_cmd,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 creationflags=subprocess.CREATE_NO_WINDOW
             )
 
-            total_seconds = 300
-            while total_seconds > 0:
-                if process.poll() is not None:
+            # Đếm lùi 300 giây (5 phút)
+            total_time = 300
+            while total_time > 0:
+                if proc.poll() is not None:
                     break
-                mins, secs = divmod(total_seconds, 60)
-                self.root.after(0, self.safe_update, item_id, title, "🔴 Đang ghi hình", f"{mins:02d}:{secs:02d}")
+                m, s = divmod(total_time, 60)
+                self.root.after(0, self.ui_update, item_id, title, "🔴 Đang ghi hình", f"{m:02d}:{s:02d}")
                 time.sleep(1)
-                total_seconds -= 1
+                total_time -= 1
 
-            if process.poll() is None:
-                try:
-                    subprocess.run(['taskkill', '/F', '/T', '/PID', str(process.pid)], creationflags=subprocess.CREATE_NO_WINDOW)
-                except Exception:
-                    pass
+            # Đợi ffmpeg chốt file .ts an toàn
+            try:
+                proc.wait(timeout=5)
+            except Exception:
+                subprocess.run(["taskkill", "/F", "/T", "/PID", str(proc.pid)], creationflags=subprocess.CREATE_NO_WINDOW)
 
-            if os.path.exists(output_file) and os.path.getsize(output_file) > 1024:
-                self.root.after(0, self.safe_update, item_id, title, "✅ Đã lưu video", "00:00")
-            else:
-                self.root.after(0, self.safe_update, item_id, title, "❌ Ghi hình thất bại (FFMPEG lỗi)", "00:00")
-        except Exception as e:
-            self.root.after(0, self.safe_update, item_id, title, f"❌ Lỗi: {str(e)[:25]}", "00:00")
-
-    def process_download(self, item_id, username, folder):
-        """Hàm xử lý luồng lấy từ Username bằng API TikTokLive"""
-        process = None
-        try:
-            self.root.after(0, self.safe_update, item_id, f"@{username}", "Kết nối Webcast...", "05:00")
-            stream_url = self.get_live_stream_url(username)
-
-            if not stream_url:
-                self.root.after(0, self.safe_update, item_id, f"@{username}", "❌ Không tìm thấy Live/Offline", "00:00")
+            # Kiểm tra file .ts có dữ liệu không
+            if not os.path.exists(ts_output) or os.path.getsize(ts_output) < 10240:
+                self.root.after(0, self.ui_update, item_id, title, "❌ Lỗi: Không bắt được hình", "00:00")
+                if os.path.exists(ts_output):
+                    os.remove(ts_output)
                 return
 
-            timestamp = int(time.time())
-            output_file = os.path.join(folder, f"Tiktok_{username}_{timestamp}.mp4")
-
-            cmd = [
+            # Bước 2: Tự động đóng sang .mp4 chuẩn có cờ faststart (đảm bảo VLC mở được 100%)
+            self.root.after(0, self.ui_update, item_id, title, "⚙️ Đang xử lý file MP4...", "00:00")
+            
+            ffmpeg_convert_cmd = [
                 "ffmpeg",
                 "-y",
-                "-i", stream_url,
-                "-t", "300",
+                "-i", ts_output,
                 "-c", "copy",
-                output_file
+                "-movflags", "faststart",
+                mp4_output
             ]
 
-            process = subprocess.Popen(
-                cmd,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                creationflags=subprocess.CREATE_NO_WINDOW
-            )
+            conv_proc = subprocess.run(ffmpeg_convert_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, creationflags=subprocess.CREATE_NO_WINDOW)
 
-            total_seconds = 300
-
-            while total_seconds > 0:
-                if process.poll() is not None:
-                    break
-
-                mins, secs = divmod(total_seconds, 60)
-                time_str = f"{mins:02d}:{secs:02d}"
-                self.root.after(0, self.safe_update, item_id, f"@{username}", "🔴 Đang ghi hình", time_str)
-                time.sleep(1)
-                total_seconds -= 1
-
-            if process.poll() is None:
-                try:
-                    subprocess.run(['taskkill', '/F', '/T', '/PID', str(process.pid)], creationflags=subprocess.CREATE_NO_WINDOW)
-                except Exception:
-                    pass
-
-            if os.path.exists(output_file) and os.path.getsize(output_file) > 1024:
-                self.root.after(0, self.safe_update, item_id, f"@{username}", "✅ Đã lưu video", "00:00")
+            # Dọn dẹp file tạm .ts sau khi đã có MP4 hoàn chỉnh
+            if os.path.exists(mp4_output) and os.path.getsize(mp4_output) > 10240:
+                if os.path.exists(ts_output):
+                    os.remove(ts_output)
+                self.root.after(0, self.ui_update, item_id, title, "✅ Đã xong (MP4 chuẩn)", "00:00")
             else:
-                self.root.after(0, self.safe_update, item_id, f"@{username}", "❌ Ghi hình thất bại", "00:00")
+                # Nếu không chuyển đổi được thì giữ nguyên file .ts để vẫn xem được
+                self.root.after(0, self.ui_update, item_id, title, "✅ Đã lưu (.TS)", "00:00")
 
-        except Exception as e:
-            self.root.after(0, self.safe_update, item_id, f"@{username}", f"❌ Lỗi: {str(e)[:25]}", "00:00")
+        except Exception as err:
+            self.root.after(0, self.ui_update, item_id, title, f"❌ Lỗi: {str(err)[:18]}", "00:00")
 
 if __name__ == "__main__":
     root = tk.Tk()
-    app = TikTokDownloaderApp(root)
+    app = TikTokFinalRecorder(root)
     root.mainloop()
