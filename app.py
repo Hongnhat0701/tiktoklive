@@ -91,7 +91,6 @@ class TikTokDownloaderApp:
             if not room_info or not client.room_id:
                 return None
             stream_data = room_info.get("stream_url", {})
-            # Ưu tiên lấy luồng flv pull url hoặc hls_pull_url
             flv_pull_url = stream_data.get("flv_pull_url", {})
             if flv_pull_url:
                 return list(flv_pull_url.values())[0]
@@ -113,14 +112,68 @@ class TikTokDownloaderApp:
             return
             
         self.task_counter += 1
-        username = self.extract_username(raw_input)
-        item_id = self.tree.insert("", tk.END, values=(self.task_counter, f"@{username}", "Đang dò luồng Live...", "05:00"))
-        self.url_entry.delete(0, tk.END) 
-        
         folder = self.save_folder.get()
-        threading.Thread(target=self.process_download, args=(item_id, username, folder), daemon=True).start()
+
+        # KIỂM TRA: NẾU LÀ LINK STREAM TRỰC TIẾP (từ extension/F12) -> CHUYỂN THẲNG QUA FFMPEG
+        if "tiktokcdn.com" in raw_input or ".flv" in raw_input or ".m3u8" in raw_input or "pull" in raw_input:
+            title = f"Stream_STT{self.task_counter}"
+            item_id = self.tree.insert("", tk.END, values=(self.task_counter, title, "Đang khởi tạo...", "05:00"))
+            self.url_entry.delete(0, tk.END)
+            threading.Thread(target=self.download_direct_stream, args=(item_id, title, raw_input, folder), daemon=True).start()
+        
+        # NẾU LÀ USERNAME HOẶC LINK PROFILE -> DÙNG TIKTOKLIVE API ĐỂ TỰ DÒ LUỒNG
+        else:
+            username = self.extract_username(raw_input)
+            item_id = self.tree.insert("", tk.END, values=(self.task_counter, f"@{username}", "Đang dò luồng Live...", "05:00"))
+            self.url_entry.delete(0, tk.END) 
+            threading.Thread(target=self.process_download, args=(item_id, username, folder), daemon=True).start()
+
+    def download_direct_stream(self, item_id, title, stream_url, folder):
+        """Hàm xử lý ghi hình trực tiếp luồng stream thô bằng ffmpeg"""
+        try:
+            timestamp = int(time.time())
+            output_file = os.path.join(folder, f"{title}_{timestamp}.mp4")
+
+            cmd = [
+                "ffmpeg",
+                "-y",
+                "-i", stream_url,
+                "-t", "300",
+                "-c", "copy",
+                output_file
+            ]
+
+            process = subprocess.Popen(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                creationflags=subprocess.CREATE_NO_WINDOW
+            )
+
+            total_seconds = 300
+            while total_seconds > 0:
+                if process.poll() is not None:
+                    break
+                mins, secs = divmod(total_seconds, 60)
+                self.root.after(0, self.safe_update, item_id, title, "🔴 Đang ghi hình", f"{mins:02d}:{secs:02d}")
+                time.sleep(1)
+                total_seconds -= 1
+
+            if process.poll() is None:
+                try:
+                    subprocess.run(['taskkill', '/F', '/T', '/PID', str(process.pid)], creationflags=subprocess.CREATE_NO_WINDOW)
+                except Exception:
+                    pass
+
+            if os.path.exists(output_file) and os.path.getsize(output_file) > 1024:
+                self.root.after(0, self.safe_update, item_id, title, "✅ Đã lưu video", "00:00")
+            else:
+                self.root.after(0, self.safe_update, item_id, title, "❌ Ghi hình thất bại (FFMPEG lỗi)", "00:00")
+        except Exception as e:
+            self.root.after(0, self.safe_update, item_id, title, f"❌ Lỗi: {str(e)[:25]}", "00:00")
 
     def process_download(self, item_id, username, folder):
+        """Hàm xử lý luồng lấy từ Username bằng API TikTokLive"""
         process = None
         try:
             self.root.after(0, self.safe_update, item_id, f"@{username}", "Kết nối Webcast...", "05:00")
@@ -133,7 +186,6 @@ class TikTokDownloaderApp:
             timestamp = int(time.time())
             output_file = os.path.join(folder, f"Tiktok_{username}_{timestamp}.mp4")
 
-            # Dùng ffmpeg hoặc yt-dlp để thu luồng trực tiếp không cần bypass web
             cmd = [
                 "ffmpeg",
                 "-y",
