@@ -5,664 +5,176 @@ import threading
 import time
 import os
 import sys
+import re
+import asyncio
 
+# Thư viện chuyên kết nối Webcast TikTok
+from TikTokLive import TikTokLiveClient
 
 class TikTokDownloaderApp:
     def __init__(self, root):
         self.root = root
-        self.root.title("TikTok Live Downloader Pro - Đa luồng")
-        self.root.geometry("750x450")
+        self.root.title("TikTok Live Downloader Pro - Auto Stream Grabber")
+        self.root.geometry("780x460")
         self.root.configure(padx=15, pady=15)
-
+        
         self.style = ttk.Style()
-
-        if "clam" in self.style.theme_names():
-            self.style.theme_use("clam")
-
-        self.style.configure(
-            "Treeview.Heading",
-            font=("Segoe UI", 10, "bold"),
-            background="#f0f0f0"
-        )
-
-        self.style.configure(
-            "Treeview",
-            font=("Segoe UI", 9),
-            rowheight=30
-        )
-
-        if getattr(sys, "frozen", False):
-            base_dir = os.path.dirname(os.path.abspath(sys.executable))
-        else:
-            base_dir = os.path.dirname(os.path.abspath(__file__))
-
-        self.base_dir = base_dir
-        self.save_folder = tk.StringVar(value=base_dir)
+        if 'clam' in self.style.theme_names():
+            self.style.theme_use('clam')
+        self.style.configure("Treeview.Heading", font=('Segoe UI', 10, 'bold'), background="#f0f0f0")
+        self.style.configure("Treeview", font=('Segoe UI', 9), rowheight=30)
+        
+        self.save_folder = tk.StringVar(value=os.getcwd())
         self.task_counter = 0
-
+        
         self.create_widgets()
-
+        
     def create_widgets(self):
         frame_folder = ttk.Frame(self.root)
         frame_folder.pack(fill=tk.X, pady=(0, 15))
-
-        ttk.Label(
-            frame_folder,
-            text="Thư mục lưu:",
-            font=("Segoe UI", 9, "bold")
-        ).pack(side=tk.LEFT)
-
-        ttk.Entry(
-            frame_folder,
-            textvariable=self.save_folder,
-            state="readonly"
-        ).pack(
-            side=tk.LEFT,
-            padx=10,
-            fill=tk.X,
-            expand=True
-        )
-
-        ttk.Button(
-            frame_folder,
-            text="📁 Chọn thư mục",
-            command=self.choose_folder
-        ).pack(side=tk.LEFT)
-
+        ttk.Label(frame_folder, text="Thư mục lưu:", font=('Segoe UI', 9, 'bold')).pack(side=tk.LEFT)
+        ttk.Entry(frame_folder, textvariable=self.save_folder, state='readonly').pack(side=tk.LEFT, padx=10, fill=tk.X, expand=True)
+        ttk.Button(frame_folder, text="📁 Chọn thư mục", command=self.choose_folder).pack(side=tk.LEFT)
+        
         frame_link = ttk.Frame(self.root)
         frame_link.pack(fill=tk.X, pady=(0, 15))
-
-        ttk.Label(
-            frame_link,
-            text="Link TikTok Live:",
-            font=("Segoe UI", 9, "bold")
-        ).pack(side=tk.LEFT)
-
+        ttk.Label(frame_link, text="Link / ID Live:", font=('Segoe UI', 9, 'bold')).pack(side=tk.LEFT)
         self.url_entry = ttk.Entry(frame_link)
-
-        self.url_entry.pack(
-            side=tk.LEFT,
-            padx=10,
-            fill=tk.X,
-            expand=True
-        )
-
-        self.style.configure(
-            "Accent.TButton",
-            font=("Segoe UI", 9, "bold"),
-            foreground="blue"
-        )
-
-        ttk.Button(
-            frame_link,
-            text="➕ Thêm tiến trình tải (5 Phút)",
-            style="Accent.TButton",
-            command=self.start_download
-        ).pack(side=tk.LEFT)
-
+        self.url_entry.pack(side=tk.LEFT, padx=10, fill=tk.X, expand=True)
+        
+        self.style.configure("Accent.TButton", font=('Segoe UI', 9, 'bold'), foreground="blue")
+        ttk.Button(frame_link, text="➕ Bắt đầu tải (5 Phút)", style="Accent.TButton", command=self.start_download).pack(side=tk.LEFT)
+        
         columns = ("id", "url", "status", "time")
-
-        self.tree = ttk.Treeview(
-            self.root,
-            columns=columns,
-            show="headings",
-            height=10
-        )
-
+        self.tree = ttk.Treeview(self.root, columns=columns, show="headings", height=10)
+        
         self.tree.heading("id", text="STT")
-        self.tree.heading("url", text="Đường link Live")
+        self.tree.heading("url", text="Tài khoản / URL")
         self.tree.heading("status", text="Trạng thái")
         self.tree.heading("time", text="Thời gian")
-
-        self.tree.column(
-            "id",
-            width=40,
-            anchor=tk.CENTER
-        )
-
-        self.tree.column(
-            "url",
-            width=370,
-            anchor=tk.W
-        )
-
-        self.tree.column(
-            "status",
-            width=180,
-            anchor=tk.CENTER
-        )
-
-        self.tree.column(
-            "time",
-            width=80,
-            anchor=tk.CENTER
-        )
-
-        self.tree.pack(
-            fill=tk.BOTH,
-            expand=True
-        )
-
-        scrollbar = ttk.Scrollbar(
-            self.tree,
-            orient=tk.VERTICAL,
-            command=self.tree.yview
-        )
-
-        self.tree.configure(
-            yscrollcommand=scrollbar.set
-        )
-
-        scrollbar.pack(
-            side=tk.RIGHT,
-            fill=tk.Y
-        )
+        
+        self.tree.column("id", width=40, anchor=tk.CENTER)
+        self.tree.column("url", width=400, anchor=tk.W)
+        self.tree.column("status", width=180, anchor=tk.CENTER)
+        self.tree.column("time", width=80, anchor=tk.CENTER)
+        
+        self.tree.pack(fill=tk.BOTH, expand=True)
+        
+        scrollbar = ttk.Scrollbar(self.tree, orient=tk.VERTICAL, command=self.tree.yview)
+        self.tree.configure(yscrollcommand=scrollbar.set)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
 
     def choose_folder(self):
-        folder = filedialog.askdirectory(
-            title="Chọn thư mục lưu video"
-        )
-
+        folder = filedialog.askdirectory(title="Chọn thư mục lưu video")
         if folder:
             self.save_folder.set(folder)
 
-    def safe_update(
-        self,
-        item_id,
-        url,
-        status,
-        time_str
-    ):
+    def safe_update(self, item_id, url, status, time_str):
         try:
-            current = self.tree.item(
-                item_id,
-                "values"
-            )
-
-            if not current:
-                return
-
-            self.tree.item(
-                item_id,
-                values=(
-                    current[0],
-                    url,
-                    status,
-                    time_str
-                )
-            )
-
+            current = self.tree.item(item_id, 'values')
+            self.tree.item(item_id, values=(current[0], url, status, time_str))
         except Exception:
             pass
 
-    def start_download(self):
-        url = self.url_entry.get().strip()
+    def extract_username(self, raw_input):
+        raw_input = raw_input.strip()
+        match = re.search(r"@([a-zA-Z0-9_.-]+)", raw_input)
+        if match:
+            return match.group(1)
+        return raw_input.replace("https://", "").replace("http://", "").split("/")[0]
 
-        if not url:
-            messagebox.showwarning(
-                "Thiếu thông tin",
-                "Vui lòng dán link TikTok Live vào ô trống!"
-            )
-            return
+    def get_live_stream_url(self, unique_id):
+        client = TikTokLiveClient(unique_id=unique_id)
+        
+        async def fetch():
+            room_info = await client.web.fetch_room_info()
+            if not room_info or not client.room_id:
+                return None
+            stream_data = room_info.get("stream_url", {})
+            # Ưu tiên lấy luồng flv pull url hoặc hls_pull_url
+            flv_pull_url = stream_data.get("flv_pull_url", {})
+            if flv_pull_url:
+                return list(flv_pull_url.values())[0]
+            return stream_data.get("hls_pull_url")
 
-        self.task_counter += 1
-        task_number = self.task_counter
-
-        item_id = self.tree.insert(
-            "",
-            tk.END,
-            values=(
-                task_number,
-                url,
-                "Đang khởi tạo...",
-                "05:00"
-            )
-        )
-
-        self.url_entry.delete(
-            0,
-            tk.END
-        )
-
-        folder = self.save_folder.get()
-
-        threading.Thread(
-            target=self.process_download,
-            args=(
-                item_id,
-                task_number,
-                url,
-                folder
-            ),
-            daemon=True
-        ).start()
-
-    def get_base_dir(self):
-        if getattr(sys, "frozen", False):
-            return os.path.dirname(
-                os.path.abspath(sys.executable)
-            )
-
-        return os.path.dirname(
-            os.path.abspath(__file__)
-        )
-
-    def get_ytdlp_command(self):
-        base_dir = self.get_base_dir()
-
-        local_ytdlp = os.path.join(
-            base_dir,
-            "yt-dlp.exe"
-        )
-
-        if os.path.isfile(local_ytdlp):
-            return local_ytdlp
-
-        return "yt-dlp"
-
-    def read_process_output(
-        self,
-        process,
-        output_lines
-    ):
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
         try:
-            for line in iter(
-                process.stdout.readline,
-                ""
-            ):
-                if not line:
-                    break
-
-                line = line.strip()
-
-                if line:
-                    output_lines.append(line)
-
-        except Exception as e:
-            output_lines.append(
-                f"Reader error: {e}"
-            )
-
+            return loop.run_until_complete(fetch())
+        except Exception:
+            return None
         finally:
-            try:
-                process.stdout.close()
-            except Exception:
-                pass
+            loop.close()
 
-    def classify_error(
-        self,
-        output_lines
-    ):
-        if not output_lines:
-            return "❌ yt-dlp đã dừng"
+    def start_download(self):
+        raw_input = self.url_entry.get().strip()
+        if not raw_input:
+            messagebox.showwarning("Thiếu thông tin", "Vui lòng nhập link hoặc username TikTok Live!")
+            return
+            
+        self.task_counter += 1
+        username = self.extract_username(raw_input)
+        item_id = self.tree.insert("", tk.END, values=(self.task_counter, f"@{username}", "Đang dò luồng Live...", "05:00"))
+        self.url_entry.delete(0, tk.END) 
+        
+        folder = self.save_folder.get()
+        threading.Thread(target=self.process_download, args=(item_id, username, folder), daemon=True).start()
 
-        full_text = "\n".join(
-            output_lines
-        )
-
-        text = full_text.lower()
-
-        if any(
-            key in text
-            for key in [
-                "sign in",
-                "login",
-                "cookie",
-                "authentication",
-                "authenticate"
-            ]
-        ):
-            return "❌ Lỗi đăng nhập/Cookies"
-
-        if any(
-            key in text
-            for key in [
-                "not currently live",
-                "not live",
-                "offline",
-                "is not live"
-            ]
-        ):
-            return "❌ Kênh không phát Live"
-
-        if any(
-            key in text
-            for key in [
-                "geo",
-                "region",
-                "country",
-                "not available in your country"
-            ]
-        ):
-            return "❌ Bị giới hạn khu vực"
-
-        if any(
-            key in text
-            for key in [
-                "private",
-                "followers-only"
-            ]
-        ):
-            return "❌ Live riêng tư"
-
-        if any(
-            key in text
-            for key in [
-                "http error",
-                "unable to download",
-                "download error",
-                "connection error",
-                "network error",
-                "timed out",
-                "timeout"
-            ]
-        ):
-            return "❌ Lỗi kết nối/Tải"
-
-        error_lines = [
-            line
-            for line in output_lines
-            if "error" in line.lower()
-        ]
-
-        if error_lines:
-            error = error_lines[-1]
-        else:
-            error = output_lines[-1]
-
-        error = error.replace(
-            "ERROR:",
-            ""
-        ).strip()
-
-        if len(error) > 50:
-            error = error[:50] + "..."
-
-        return f"❌ {error}"
-
-    def process_download(
-        self,
-        item_id,
-        task_number,
-        url,
-        folder
-    ):
+    def process_download(self, item_id, username, folder):
         process = None
-        output_lines = []
-
         try:
-            base_dir = self.get_base_dir()
+            self.root.after(0, self.safe_update, item_id, f"@{username}", "Kết nối Webcast...", "05:00")
+            stream_url = self.get_live_stream_url(username)
 
-            cookie_path = os.path.join(
-                base_dir,
-                "cookies.txt"
-            )
-
-            if not os.path.isfile(cookie_path):
-                self.root.after(
-                    0,
-                    self.safe_update,
-                    item_id,
-                    url,
-                    "❌ Thiếu cookies.txt",
-                    "00:00"
-                )
+            if not stream_url:
+                self.root.after(0, self.safe_update, item_id, f"@{username}", "❌ Không tìm thấy Live/Offline", "00:00")
                 return
 
-            output_template = os.path.join(
-                folder,
-                f"TiktokLive_STT{task_number}_%(id)s.%(ext)s"
-            )
+            timestamp = int(time.time())
+            output_file = os.path.join(folder, f"Tiktok_{username}_{timestamp}.mp4")
 
-            ytdlp = self.get_ytdlp_command()
-
+            # Dùng ffmpeg hoặc yt-dlp để thu luồng trực tiếp không cần bypass web
             cmd = [
-                ytdlp,
-                "--no-part",
-                "--cookies",
-                cookie_path,
-                "-o",
-                output_template,
-                url
+                "ffmpeg",
+                "-y",
+                "-i", stream_url,
+                "-t", "300",
+                "-c", "copy",
+                output_file
             ]
 
             process = subprocess.Popen(
                 cmd,
                 stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
+                stderr=subprocess.PIPE,
                 creationflags=subprocess.CREATE_NO_WINDOW
             )
-
-            reader_thread = threading.Thread(
-                target=self.read_process_output,
-                args=(
-                    process,
-                    output_lines
-                ),
-                daemon=True
-            )
-
-            reader_thread.start()
 
             total_seconds = 300
 
             while total_seconds > 0:
-
                 if process.poll() is not None:
+                    break
 
-                    reader_thread.join(
-                        timeout=2
-                    )
-
-                    status_text = self.classify_error(
-                        output_lines
-                    )
-
-                    print("\n========== YT-DLP ==========")
-
-                    for line in output_lines:
-                        print(line)
-
-                    print(
-                        "RETURN CODE:",
-                        process.returncode
-                    )
-
-                    print(
-                        "============================\n"
-                    )
-
-                    self.root.after(
-                        0,
-                        self.safe_update,
-                        item_id,
-                        url,
-                        status_text,
-                        "00:00"
-                    )
-
-                    return
-
-                mins, secs = divmod(
-                    total_seconds,
-                    60
-                )
-
-                time_str = (
-                    f"{mins:02d}:{secs:02d}"
-                )
-
-                self.root.after(
-                    0,
-                    self.safe_update,
-                    item_id,
-                    url,
-                    "🔴 Đang ghi hình",
-                    time_str
-                )
-
+                mins, secs = divmod(total_seconds, 60)
+                time_str = f"{mins:02d}:{secs:02d}"
+                self.root.after(0, self.safe_update, item_id, f"@{username}", "🔴 Đang ghi hình", time_str)
                 time.sleep(1)
-
                 total_seconds -= 1
 
             if process.poll() is None:
-
                 try:
-                    subprocess.run(
-                        [
-                            "taskkill",
-                            "/F",
-                            "/T",
-                            "/PID",
-                            str(process.pid)
-                        ],
-                        creationflags=subprocess.CREATE_NO_WINDOW,
-                        stdout=subprocess.DEVNULL,
-                        stderr=subprocess.DEVNULL,
-                        timeout=10
-                    )
-
+                    subprocess.run(['taskkill', '/F', '/T', '/PID', str(process.pid)], creationflags=subprocess.CREATE_NO_WINDOW)
                 except Exception:
                     pass
 
-            try:
-                process.wait(
-                    timeout=10
-                )
-            except Exception:
-                pass
-
-            reader_thread.join(
-                timeout=3
-            )
-
-            try:
-                files = os.listdir(
-                    folder
-                )
-
-                prefix = (
-                    f"TiktokLive_STT{task_number}_"
-                )
-
-                video_files = []
-
-                for filename in files:
-
-                    full_path = os.path.join(
-                        folder,
-                        filename
-                    )
-
-                    if (
-                        filename.startswith(prefix)
-                        and os.path.isfile(full_path)
-                        and os.path.getsize(full_path) > 0
-                    ):
-                        video_files.append(
-                            filename
-                        )
-
-            except Exception:
-                video_files = []
-
-            if video_files:
-
-                self.root.after(
-                    0,
-                    self.safe_update,
-                    item_id,
-                    url,
-                    "✅ Đã lưu video",
-                    "00:00"
-                )
-
+            if os.path.exists(output_file) and os.path.getsize(output_file) > 1024:
+                self.root.after(0, self.safe_update, item_id, f"@{username}", "✅ Đã lưu video", "00:00")
             else:
-
-                status_text = self.classify_error(
-                    output_lines
-                )
-
-                if status_text == "❌ yt-dlp đã dừng":
-                    status_text = "❌ Không tạo được video"
-
-                self.root.after(
-                    0,
-                    self.safe_update,
-                    item_id,
-                    url,
-                    status_text,
-                    "00:00"
-                )
-
-                print("\n========== YT-DLP ==========")
-
-                for line in output_lines:
-                    print(line)
-
-                print(
-                    "RETURN CODE:",
-                    process.returncode
-                )
-
-                print(
-                    "============================\n"
-                )
-
-        except FileNotFoundError:
-
-            self.root.after(
-                0,
-                self.safe_update,
-                item_id,
-                url,
-                "❌ Không tìm thấy yt-dlp",
-                "00:00"
-            )
+                self.root.after(0, self.safe_update, item_id, f"@{username}", "❌ Ghi hình thất bại", "00:00")
 
         except Exception as e:
-
-            print(
-                "APP ERROR:",
-                repr(e)
-            )
-
-            self.root.after(
-                0,
-                self.safe_update,
-                item_id,
-                url,
-                f"❌ Lỗi: {str(e)[:35]}",
-                "00:00"
-            )
-
-        finally:
-
-            if process is not None:
-
-                try:
-
-                    if process.poll() is None:
-
-                        subprocess.run(
-                            [
-                                "taskkill",
-                                "/F",
-                                "/T",
-                                "/PID",
-                                str(process.pid)
-                            ],
-                            creationflags=subprocess.CREATE_NO_WINDOW,
-                            stdout=subprocess.DEVNULL,
-                            stderr=subprocess.DEVNULL
-                        )
-
-                except Exception:
-                    pass
-
+            self.root.after(0, self.safe_update, item_id, f"@{username}", f"❌ Lỗi: {str(e)[:25]}", "00:00")
 
 if __name__ == "__main__":
     root = tk.Tk()
